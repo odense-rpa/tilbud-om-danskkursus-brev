@@ -1,2 +1,33 @@
-.venv
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Environment variables
 .env
+.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.egg
+
+# uv
+.python-version
+uv.lock
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

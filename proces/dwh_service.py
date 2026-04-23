@@ -49,8 +49,8 @@ class DWHService:
       ,[Dato_Ajourfoert]
       ,[Alder_aar]
       ,[Land_indrejst_fra]
-FROM [RPA_Dataudveksling_DWH].[dbo].[tilbud_danskundervisning]
-WHERE [Dato_Ajourfoert] >= '{dato}' OR [Dato_ophold_start] >= '{dato}'""" 
+       FROM [{self.database}].[dbo].[tilbud_danskundervisning]
+       WHERE [Dato_Ajourfoert] >= '{dato}' OR [Dato_ophold_start] >= '{dato}'""" 
 
         cursor = self.connection.cursor(as_dict=True)
         cursor.execute(query)
@@ -58,3 +58,22 @@ WHERE [Dato_Ajourfoert] >= '{dato}' OR [Dato_ophold_start] >= '{dato}'"""
         cursor.close()
         
         return results
+    
+    def hent_adresser_på_borger(self, cpr:str) -> list[dict]:
+        if self.connection is None:
+            raise RuntimeError("Failed to establish database connection.")
+        
+        cpr = cpr.replace("-", "")
+        query = f"""SELECT
+       [Standardadresse]
+      ,[Aktuel]
+       FROM [{self.database}].[dbo].[adresse_historik_kommune_kendt]
+       WHERE Cpr='{cpr}'"""
+
+        cursor = self.connection.cursor(as_dict=True)
+        cursor.execute(query)
+        results = cast(list[dict], cursor.fetchall() or [])
+        cursor.close()
+
+        return results
+        

@@ -10,6 +10,7 @@ class Borger(BaseModel):
     postnr: int
     by: str
     statsborgerskab: str
+    indrejsedato: date
 
     @field_validator("cpr")
     @classmethod

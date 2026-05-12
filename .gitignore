@@ -34,3 +34,11 @@ Thumbs.db
 
 # Documents
 *.docx
+
+# Certificates
+*.pem
+*.crt
+*.cer
+*.key
+*.p12
+*.pfx

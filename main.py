@@ -2,10 +2,12 @@ import asyncio
 import logging
 import sys
 from datetime import datetime
+import os
 
 from automation_server_client import AutomationServer, Workqueue, WorkItemError, Credential, WorkItemStatus
 from sbsys.manager import SbsysClientManager
 import sbsip
+from datafordeler import Datafordeler
 from proces.models import Borger
 from odk_tools.tracking import Tracker
 from odk_tools.reporting import report
@@ -14,10 +16,11 @@ from proces.dwh_service import DWHService
 from proces.sbsys_service import SbsysService
 from proces.brev_service import BrevService
 
-proces_navn = "Tilbud om danskkursusbrev"
+proces_navn = "Tilbud om danskkursus"
 dwh_service: DWHService
 sbsys: SbsysClientManager
 sbsys_service: SbsysService
+fordeler: Datafordeler
 
 
 async def populate_queue(workqueue: Workqueue):
@@ -39,7 +42,7 @@ async def populate_queue(workqueue: Workqueue):
             by=borger["Postdistrikt"],
             statsborgerskab=borger["Land_statsborger"],
             #Indrejsedato sættes til dato_ajourført af historiske årsager, det er videreført fra BP
-            indrejsedato=borger["Dato_Ajourfoert"]
+            indrejsedato=str(borger["Dato_Ajourfoert"])
         )
         
         if workqueue.get_item_by_reference(borger_obj.cpr, WorkItemStatus.COMPLETED) == []:
@@ -55,8 +58,12 @@ async def process_workqueue(workqueue: Workqueue):
                     borger: Borger = Borger.model_validate(item.data)
                     try:
                         #Tjek om borger har flere adresser
-                        if len(dwh_service.hent_adresser_på_borger(borger.cpr)) > 1:
-                            logger.info("Mere end 1 adresse indikerer at borgere måske allerede har fået tilbudt danskkursus, sendes til manuel")
+                        adresser = dwh_service.hent_adresser_på_borger(borger.cpr)
+                        if len(adresser) > 1:
+                            logger.info("Mere end 1 adresse fundet på borger, kontrollerer om de har haft boligplacering")
+                            if any(adresse["Standardadresse"] == "Boligplacering" for adresse in adresser):
+                                logger.info("Borger har haft boligplacering, de anses derfor som flygtning og skal derfor ikke have brev, går videre til næste ogpave")
+                                continue
                             raise WorkItemError("Flere adresser fundet. Borger har haft bopæl i DK før")
                             
                         #Opret borger i Sbsys
@@ -64,23 +71,16 @@ async def process_workqueue(workqueue: Workqueue):
                         
                         if sbsys_borger is None:
                             logger.info("Borger ikke oprettet, ligger opgaven til manuel behandling")
-                            raise WorkItemError("SBSYS-fejl: person kunne ikke oprettes i SBSYS")
+                            raise WorkItemError("SBSYS-fejl: person kunne ikke oprettes i SBSYS, person har muligvis midlertidigt cprnr")
                             
-                        #Tjek om borger allerede har sag
-                        if len(await sbsys_service.hent_relevate_sager(borger)) > 0:
-                            logger.info("Borger har allerede sag, sendes derfor til manuel")
-                            report(
-                                "tilbud_om_danskkursus_brev",
-                                "Manuel",
-                                json={
-                                    "Cpr": borger.cpr,
-                                    "Navn": borger.navn,
-                                    "Statsborgerskab": borger.statsborgerskab,
-                                    "Indrejsedato": borger.indrejsedato,
-                                    "Manuel årsag": "Flere adresser fundet på borger. Borger har muligvis haft bopæl i Danmark før"
-                                }
-                            )
-                            continue
+                        #Tjek om borger allerede har indrejsesag
+                        sag = await sbsys_service.hent_nyeste_relevate_sag(borger)
+                        if sag is not None:
+                            logger.info("Borger har allerede sag, kontrollere om notat er på sagen")
+                            if (await sbsys_service.kontroller_om_sag_har_journalnotat(sag)):
+                                logger.info("Borger har notat på sagen, alt godt, går videre til næste opgave")
+                                continue
+                            raise WorkItemError("Borger har indrejsesag, men har ikke notat, har muligvis allerede fået brev")
                         
                         weekday = datetime.today().weekday()
                         if weekday in (1, 3):  # Tuesday, Thursday
@@ -93,7 +93,7 @@ async def process_workqueue(workqueue: Workqueue):
                         #Opretter sag på borger
                         sag = await sbsys_service.opret_sag(sbsys_borger["Id"], sagsbehandler_initialer)
                         
-                        BrevService.flet_og_send_brev(borger,"Danish Language Course.docx")
+                        BrevService.flet_og_send_brev(borger, "Danish Language Course.docx", fordeler)
                         
                         try:
                             await sbsys_service.opret_journalnotat_på_sag(sag["Id"], borger)
@@ -122,15 +122,31 @@ async def process_workqueue(workqueue: Workqueue):
                                     "Navn": borger.navn,
                                     "Statsborgerskab": borger.statsborgerskab,
                                     "Indrejsedato": borger.indrejsedato,
-                                    "Manuel årsag": e
+                                    "Manuel årsag": str(e)
                             }
                         )
                         tracker.track_partial_task(proces_navn)
+                        
+                    except Exception as e:
+                        
+                        report(
+                            "tilbud_om_danskkursus_brev",
+                            "Manuel",
+                            json={
+                                    "Cpr": borger.cpr,
+                                    "Navn": borger.navn,
+                                    "Statsborgerskab": borger.statsborgerskab,
+                                    "Indrejsedato": borger.indrejsedato,
+                                    "Manuel årsag": str(e)
+                            }
+                        )
                         logger.error(f"Error processing item: {borger.cpr}. Error: {e}")
                         item.fail(str(e))
+                    
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     ats = AutomationServer.from_environment()
     workqueue = ats.workqueue()
 
@@ -138,6 +154,12 @@ if __name__ == "__main__":
     dwh_creds = Credential.get_credential("Odense SQL Server")
     sbsys_credential = Credential.get_credential("SBSYS - produktion")
     sbsip_credential = Credential.get_credential("SBSip - produktion")
+    
+    certifikat_sti = os.getenv("CERTIFIKATER", "/certifikater")
+    fordeler = Datafordeler(
+        certifikat_sti=os.path.join(certifikat_sti, "datafordeler.crt"),
+        certifikat_nøglefil=os.path.join(certifikat_sti, "datafordeler.key"),
+    )
     
     dwh_service = DWHService(
         server=dwh_creds.data["server"],

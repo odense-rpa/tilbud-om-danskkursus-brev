@@ -10,7 +10,7 @@ class Borger(BaseModel):
     postnr: int
     by: str
     statsborgerskab: str
-    indrejsedato: date
+    indrejsedato: str
 
     @field_validator("cpr")
     @classmethod
@@ -22,4 +22,13 @@ class Borger(BaseModel):
             if len(v) != 10:
                 raise ValueError("CPR skal være 10 cifre uden bindestreg eller 11 tegn med bindestreg")
             v = v[:6] + "-" + v[6:]
+        return v
+
+    @field_validator("indrejsedato")
+    @classmethod
+    def validate_indrejsedato(cls, v: str) -> str:
+        try:
+            date.fromisoformat(v)
+        except ValueError:
+            raise ValueError("indrejsedato skal være i formatet yyyy-MM-dd")
         return v 

@@ -6,6 +6,8 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "automation-server-client",
+    "datafordeler",
+    "dotenv>=0.9.9",
     "httpx>=0.28.1",
     "odk-tools",
     "pymssql>=2.3.2",
@@ -18,3 +20,4 @@ automation-server-client = { git = "https://github.com/odense-rpa/automation-ser
 sbsys = { git = "https://github.com/odense-rpa/sbsys-ng.git" }
 odk-tools = { git = "https://github.com/odense-rpa/odk-tools.git" }
 sbsip = { git = "https://github.com/odense-rpa/sbsip.git" }
+datafordeler = { git = "https://github.com/odense-rpa/datafordeler.git" }

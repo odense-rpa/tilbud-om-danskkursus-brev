@@ -11,7 +11,7 @@ class SbsysService:
         self.sbsys = sbsys
     
     
-    async def hent_relevate_sager(self, borger: Borger) -> list[dict]:
+    async def hent_nyeste_relevate_sag(self, borger: Borger) -> dict|None:
         
         sager = await self.sbsys.sager.søg_sager(
             {
@@ -27,7 +27,22 @@ class SbsysService:
             }
         )
         
-        return sager
+        sag = None
+        
+        if len(sager) > 1:
+            sag = [max(sager, key=lambda s: s["Oprettet"])][0]
+        elif len(sager) == 1:
+            sag = sager[0]
+            
+        return sag
+    
+    async def kontroller_om_sag_har_journalnotat(self, sag:dict) -> bool:
+            notater = await self.sbsys.journalnotater.hent_journalnotater_på_sag(sag["Id"])
+            
+            return any(
+                str(notat.get("Overskrift", "")).startswith("Tilbud om danskundervisning sendt")
+                for notat in notater
+            )
 
     async def opret_sag(self, sbsys_id:int, sagsbehandler_initialer: str) -> dict:
         

@@ -1,6 +1,7 @@
 import httpx
 from proces.models import Borger
 from automation_server_client import WorkItemError
+from datafordeler import Datafordeler
 from datetime import datetime
 from pathlib import Path
 import json
@@ -8,7 +9,7 @@ import sbsip
 
 class BrevService:
     @staticmethod
-    def flet_og_send_brev(borger: Borger, fil_sti: str):
+    def flet_og_send_brev(borger: Borger, fil_sti: str, fordeler: Datafordeler):
         
         brev_felter = {
             "PersonNavn": borger.navn,
@@ -31,22 +32,28 @@ class BrevService:
                     data={"fields": json.dumps(brev_felter)}     
                 )
         except:
-            raise WorkItemError("Teknisk fejl: Kunne ikke danne brev")
+            raise RuntimeError("Teknisk fejl: Kunne ikke danne brev")
             
         pdf_path = Path("Danish Language Course.pdf")
         pdf_path.write_bytes(response.content)
         
+        cpr_uden_bindestreg = borger.cpr.replace("-","")
+        
+        adresse, post_nr = fordeler.hent_adresse_til_sbsip(cpr_uden_bindestreg)
+
         try:
             sbsip.send_digital_post(
-                cpr=borger.cpr,
+                cpr=cpr_uden_bindestreg,
                 overskrift="Tilbud om danskundervisning",
                 beskrivelse="Tilbud om danskundervisning",
                 vedhæftet_fil=pdf_path,
+                post_nr=post_nr,
+                adresse=adresse,
                 sbsys_skabelon_id="536"
             )
         except:
             pdf_path.unlink()
-            raise WorkItemError("Teknisk fejl: Kunne ikke sende brev")
+            raise RuntimeError("Teknisk fejl: Kunne ikke sende brev")
         
         pdf_path.unlink()
         

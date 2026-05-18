@@ -34,7 +34,7 @@ class BrevService:
         except:
             raise RuntimeError("Teknisk fejl: Kunne ikke danne brev")
             
-        pdf_path = Path("Danish Language Course.pdf")
+        pdf_path = Path(fil_sti)
         pdf_path.write_bytes(response.content)
         
         cpr_uden_bindestreg = borger.cpr.replace("-","")

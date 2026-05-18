@@ -3,6 +3,8 @@ import logging
 import sys
 from datetime import datetime
 import os
+from pathlib import Path
+import argparse
 
 from automation_server_client import AutomationServer, Workqueue, WorkItemError, Credential, WorkItemStatus
 from sbsys.manager import SbsysClientManager
@@ -49,7 +51,7 @@ async def populate_queue(workqueue: Workqueue):
             workqueue.add_item(borger_obj.model_dump(), borger_obj.cpr)    
 
 
-async def process_workqueue(workqueue: Workqueue):
+async def process_workqueue(workqueue: Workqueue, fil_sti:str):
     logger = logging.getLogger(__name__)
     with dwh_service:
         async with sbsys:
@@ -93,7 +95,7 @@ async def process_workqueue(workqueue: Workqueue):
                         #Opretter sag på borger
                         sag = await sbsys_service.opret_sag(sbsys_borger["Id"], sagsbehandler_initialer)
                         
-                        BrevService.flet_og_send_brev(borger, "Danish Language Course.docx", fordeler)
+                        BrevService.flet_og_send_brev(borger, fil_sti, fordeler)
                         
                         try:
                             await sbsys_service.opret_journalnotat_på_sag(sag["Id"], borger)
@@ -112,6 +114,7 @@ async def process_workqueue(workqueue: Workqueue):
                                 }
                             )
                         tracker.track_task(proces_navn)
+                        
                     except WorkItemError as e:
                         # A WorkItemError represents a soft error that indicates the item should be passed to manual processing or a business logic fault
                         report(
@@ -154,6 +157,14 @@ if __name__ == "__main__":
     dwh_creds = Credential.get_credential("Odense SQL Server")
     sbsys_credential = Credential.get_credential("SBSYS - produktion")
     sbsip_credential = Credential.get_credential("SBSip - produktion")
+    
+    parser = argparse.ArgumentParser(description=proces_navn)
+    parser.add_argument(
+        "--word-template",
+        default="Danish Language Course.docx",
+        help="Path to the Word template for letter generation (default: ./Tildeling af sygeplejeartikler til terminale borgere.docx)",
+    )
+    args = parser.parse_args()
     
     certifikat_sti = os.getenv("CERTIFIKATER", "/certifikater")
     fordeler = Datafordeler(
@@ -198,4 +209,6 @@ if __name__ == "__main__":
         exit(0)
 
     # Process workqueue
-    asyncio.run(process_workqueue(workqueue))
+    if not Path(args.word_template).is_file():
+        raise FileNotFoundError(f"Word-skabelon ikke fundet: {args.word_template}")
+    asyncio.run(process_workqueue(workqueue, args.word_template))

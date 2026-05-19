@@ -97,6 +97,7 @@ async def process_workqueue(workqueue: Workqueue, fil_sti:str):
                         
                         BrevService.flet_og_send_brev(borger, fil_sti, fordeler)
                         
+                        
                         try:
                             await sbsys_service.opret_journalnotat_på_sag(sag["Id"], borger)
                         except:
@@ -169,7 +170,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--word-template",
         default="Danish Language Course.docx",
-        help="Path to the Word template for letter generation (default: ./Tildeling af sygeplejeartikler til terminale borgere.docx)",
+        help="Path to the Word template for letter generation",
     )
     args = parser.parse_args()
     

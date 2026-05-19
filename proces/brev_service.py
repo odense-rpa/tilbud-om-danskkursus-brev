@@ -5,12 +5,13 @@ from datafordeler import Datafordeler
 from datetime import datetime
 from pathlib import Path
 import json
-import sbsip 
+import sbsip
+import logging
 
 class BrevService:
     @staticmethod
     def flet_og_send_brev(borger: Borger, fil_sti: str, fordeler: Datafordeler):
-        
+        logger = logging.getLogger(__name__)
         brev_felter = {
             "PersonNavn": borger.navn,
             "Adresse": borger.adresse,
@@ -31,10 +32,11 @@ class BrevService:
                     },
                     data={"fields": json.dumps(brev_felter)}     
                 )
-        except:
+        except Exception as e:
+            logger.error(e)
             raise RuntimeError("Teknisk fejl: Kunne ikke danne brev")
             
-        pdf_path = Path(fil_sti)
+        pdf_path = Path("Danskkursusbrev.pdf")
         pdf_path.write_bytes(response.content)
         
         cpr_uden_bindestreg = borger.cpr.replace("-","")
@@ -51,8 +53,9 @@ class BrevService:
                 adresse=adresse,
                 sbsys_skabelon_id="536"
             )
-        except:
+        except Exception as e:
             pdf_path.unlink()
+            logger.error(e)
             raise RuntimeError("Teknisk fejl: Kunne ikke sende brev")
         
         pdf_path.unlink()

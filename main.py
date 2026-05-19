@@ -159,6 +159,13 @@ if __name__ == "__main__":
     sbsip_credential = Credential.get_credential("SBSip - produktion")
     
     parser = argparse.ArgumentParser(description=proces_navn)
+    
+    parser.add_argument(
+        "--queue",
+        action="store_true",
+        help="Udfyld køen og afslut",
+    )
+    
     parser.add_argument(
         "--word-template",
         default="Danish Language Course.docx",
@@ -203,7 +210,7 @@ if __name__ == "__main__":
     )
 
     # Queue management
-    if "--queue" in sys.argv:
+    if args.queue:
         workqueue.clear_workqueue(WorkItemStatus.NEW)
         asyncio.run(populate_queue(workqueue))
         exit(0)

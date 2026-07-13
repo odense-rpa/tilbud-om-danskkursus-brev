@@ -20,6 +20,12 @@ class BrevService:
             "Cpr": borger.cpr,
             "Dato": datetime.today().strftime("%d-%m-%Y"),
         }
+        
+        cpr_uden_bindestreg = borger.cpr.replace("-","")
+        adresse, post_nr = fordeler.hent_adresse_til_sbsip(cpr_uden_bindestreg)
+        
+        if post_nr == "9999" or post_nr is None or post_nr == 9999:
+            raise WorkItemError("Borger har ukendt adresse, og kan derfor ikke modtage brevet")
 
         try:
             with open(
@@ -39,10 +45,6 @@ class BrevService:
         pdf_path = Path("Danskkursusbrev.pdf")
         pdf_path.write_bytes(response.content)
         
-        cpr_uden_bindestreg = borger.cpr.replace("-","")
-        
-        adresse, post_nr = fordeler.hent_adresse_til_sbsip(cpr_uden_bindestreg)
-
         try:
             sbsip.send_digital_post(
                 cpr=cpr_uden_bindestreg,

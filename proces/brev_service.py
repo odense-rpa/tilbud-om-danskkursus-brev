@@ -10,7 +10,7 @@ import logging
 
 class BrevService:
     @staticmethod
-    def flet_og_send_brev(borger: Borger, fil_sti: str, fordeler: Datafordeler):
+    def flet_og_send_brev(borger: Borger, fil_sti: str, adresse, post_nr):
         logger = logging.getLogger(__name__)
         brev_felter = {
             "PersonNavn": borger.navn,
@@ -22,7 +22,6 @@ class BrevService:
         }
         
         cpr_uden_bindestreg = borger.cpr.replace("-","")
-        adresse, post_nr = fordeler.hent_adresse_til_sbsip(cpr_uden_bindestreg)
         
         if post_nr == "9999" or post_nr is None or post_nr == 9999:
             raise WorkItemError("Borger har ukendt adresse, og kan derfor ikke modtage brevet")

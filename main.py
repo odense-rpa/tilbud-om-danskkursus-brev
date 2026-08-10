@@ -71,18 +71,26 @@ async def process_workqueue(workqueue: Workqueue, fil_sti:str):
                         #Opret borger i Sbsys
                         sbsys_borger = await sbsys.borger.opret_borger(borger.cpr)
                         
+                        #Her hentes adresseinfo til brevsender, det gøres her da der kan være borgere som ikke er i Datafordeleren endnu, 
+                        #og vi skal tjekke før integrationssag for at der ikke oprettes en integrationssag som vil sende den til manuel imorgen
+                        try:
+                            cpr_uden_bindestreg = borger.cpr.replace("-","")
+                            adresse, post_nr = fordeler.hent_adresse_til_sbsip(cpr_uden_bindestreg)
+                        except:
+                            raise Exception("Aktiv adresse ikke fundet i datafordeler, derfor ikke muligt at sende brev, prøver igen imorgen")
+                        
                         if sbsys_borger is None:
                             logger.info("Borger ikke oprettet, ligger opgaven til manuel behandling")
                             raise WorkItemError("SBSYS-fejl: person kunne ikke oprettes i SBSYS, person har muligvis midlertidigt cprnr")
                             
-                        #Tjek om borger allerede har indrejsesag
+                        #Tjek om borger allerede har integrationssag
                         sag = await sbsys_service.hent_nyeste_relevate_sag(borger)
                         if sag is not None:
                             logger.info("Borger har allerede sag, kontrollere om notat er på sagen")
                             if (await sbsys_service.kontroller_om_sag_har_journalnotat(sag)):
                                 logger.info("Borger har notat på sagen, alt godt, går videre til næste opgave")
                                 continue
-                            raise WorkItemError("Borger har indrejsesag, men har ikke notat, har muligvis allerede fået brev")
+                            raise WorkItemError("Borger har integrationssag, men har ikke notat, har muligvis allerede fået brev")
                         
                         weekday = datetime.today().weekday()
                         if weekday in (1, 3):  # Tuesday, Thursday
@@ -95,8 +103,7 @@ async def process_workqueue(workqueue: Workqueue, fil_sti:str):
                         #Opretter sag på borger
                         sag = await sbsys_service.opret_sag(sbsys_borger["Id"], sagsbehandler_initialer)
                         
-                        BrevService.flet_og_send_brev(borger, fil_sti, fordeler)
-                        
+                        BrevService.flet_og_send_brev(borger, fil_sti, adresse, post_nr)                       
                         
                         try:
                             await sbsys_service.opret_journalnotat_på_sag(sag["Id"], borger)

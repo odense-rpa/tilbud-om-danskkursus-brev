@@ -2,14 +2,13 @@ import asyncio
 import logging
 import sys
 from datetime import datetime
-import os
 from pathlib import Path
 import argparse
 
 from automation_server_client import AutomationServer, Workqueue, WorkItemError, Credential, WorkItemStatus
 from sbsys.manager import SbsysClientManager
 import sbsip
-from datafordeler import Datafordeler
+from datafordeler import DatafordelerGraphQL
 from proces.models import Borger
 from odk_tools.tracking import Tracker
 from odk_tools.reporting import report
@@ -22,7 +21,7 @@ proces_navn = "Tilbud om danskkursus"
 dwh_service: DWHService
 sbsys: SbsysClientManager
 sbsys_service: SbsysService
-fordeler: Datafordeler
+fordeler: DatafordelerGraphQL
 
 
 async def populate_queue(workqueue: Workqueue):
@@ -75,8 +74,8 @@ async def process_workqueue(workqueue: Workqueue, fil_sti:str):
                         #og vi skal tjekke før integrationssag for at der ikke oprettes en integrationssag som vil sende den til manuel imorgen
                         try:
                             cpr_uden_bindestreg = borger.cpr.replace("-","")
-                            adresse, post_nr = fordeler.hent_adresse_til_sbsip(cpr_uden_bindestreg)
-                        except:
+                            adresse, post_nr = fordeler.hent_person(cpr_uden_bindestreg).sbsip_adresse()
+                        except ValueError:
                             raise Exception("Aktiv adresse ikke fundet i datafordeler, derfor ikke muligt at sende brev, prøver igen imorgen")
                         
                         if sbsys_borger is None:
@@ -165,7 +164,8 @@ if __name__ == "__main__":
     dwh_creds = Credential.get_credential("Odense SQL Server")
     sbsys_credential = Credential.get_credential("SBSYS - produktion")
     sbsip_credential = Credential.get_credential("SBSip - produktion")
-    
+    datafordeler_credential = Credential.get_credential("Datafordeler")
+
     parser = argparse.ArgumentParser(description=proces_navn)
     
     parser.add_argument(
@@ -181,10 +181,9 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     
-    certifikat_sti = os.getenv("CERTIFIKATER", "/certifikater")
-    fordeler = Datafordeler(
-        certifikat_sti=os.path.join(certifikat_sti, "datafordeler.crt"),
-        certifikat_nøglefil=os.path.join(certifikat_sti, "datafordeler.key"),
+    fordeler = DatafordelerGraphQL(
+        client_id=datafordeler_credential.username,
+        client_secret=datafordeler_credential.password,
     )
     
     dwh_service = DWHService(

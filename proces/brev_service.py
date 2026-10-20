@@ -1,7 +1,6 @@
 import httpx
 from proces.models import Borger
 from automation_server_client import WorkItemError
-from datafordeler import Datafordeler
 from datetime import datetime
 from pathlib import Path
 import json
